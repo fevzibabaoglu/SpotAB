@@ -11,12 +11,19 @@ class SpotifyClient:
 
     def get_track(self):
         track_info = {
-            'status_code': None,
             'currently_playing_type': None,
             'name': None,
             'artists': None,
             'release_year': None,
             'is_local': None
+        }
+        response_info = {
+            'status_code': None,
+            'retry_after': None
+        }
+        api_info = {
+            'track_info': track_info,
+            'response_info': response_info
         }
 
         response = requests.get(
@@ -26,7 +33,13 @@ class SpotifyClient:
             }
         )
 
-        track_info['status_code'] = response.status_code
+        response_info['status_code'] = response.status_code
+
+        if response.status_code in [429, 503]:
+            try:
+                response_info['retry_after'] = int(response.headers['Retry-After'])
+            except KeyError:
+                pass
 
         if response.status_code == 401:
             self.auth.refresh_access_token()
@@ -35,7 +48,8 @@ class SpotifyClient:
 
             track_info['currently_playing_type'] = response_json['currently_playing_type']
 
-            if (response_json['currently_playing_type'] == 'track'):
+            if response_json['currently_playing_type'] == 'track':
+                track_info['is_local'] = response_json["item"]["is_local"]
                 track_info['name'] = response_json['item']['name']
 
                 artists = response_json["item"]["artists"]
@@ -51,9 +65,7 @@ class SpotifyClient:
 
                     track_info['release_year'] = date[0]
 
-                track_info['is_local'] = response_json["item"]["is_local"]
-
-        return track_info
+        return api_info
 
     def toggle_mute(self):
         self.audio_controller.toggle_mute()
